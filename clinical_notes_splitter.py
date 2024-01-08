@@ -5,7 +5,7 @@ import pandas as pd
 import regex
 
 
-def find_date(txt: str, reg: str = "Entered on -", window: int = 20) -> List[Dict[str, Any]]:
+def find_date(txt: str,original_update_time_value = None, reg: str = "Entered on -", window: int = 20, verbosity: int = 0) -> List[Dict[str, Any]]:
     """
     Find and extract chunks of text with associated dates from the input text.
 
@@ -45,11 +45,21 @@ def find_date(txt: str, reg: str = "Entered on -", window: int = 20) -> List[Dic
         else:
             if len(ts) == 0:
                 # no timestamp found
-                print("no timestamp found in ", dw)
+                if verbosity > 1:
+                    print("no timestamp found in ", dw)
+                else:
+                    pass
+                    
             else:
-                #multiple matches
-                print("too many timestamps found in ", dw)
-            date = None
+                if verbosity > 1:
+                    #multiple matches
+                    print("too many timestamps found in ", dw)
+                else:
+                    pass
+                
+            #date = None
+            #return original date to avoid None
+            date = original_update_time_value
         
         text_end =  match.span()[1] + date_l + 1 #+1 as all seem to be 1 char short
         chunk_t = txt[text_start:text_end]
@@ -64,7 +74,7 @@ def find_date(txt: str, reg: str = "Entered on -", window: int = 20) -> List[Dic
     return chunks
 
 
-def split_clinical_notes(clin_note: pd.DataFrame) -> pd.DataFrame:
+def split_clinical_notes(clin_note: pd.DataFrame, verbosity_val=0) -> pd.DataFrame:
     """
     Split clinical notes into chunks based on extracted dates.
 
@@ -89,7 +99,7 @@ def split_clinical_notes(clin_note: pd.DataFrame) -> pd.DataFrame:
     
     for index, row in clin_note.iterrows():
         d = row['body_analysed']
-        ch = find_date(d)
+        ch = find_date(d, original_update_time_value = row['updatetime'], verbosity= verbosity_val)
         extracted.append({'id':row['id'],'client_idcode':row['client_idcode'], 'chunks': ch})
         
         document_description_list.append(row['document_description'])
@@ -123,7 +133,7 @@ def split_clinical_notes(clin_note: pd.DataFrame) -> pd.DataFrame:
     processed = pd.DataFrame(new_docs)
     return processed, none_rows
 
-def split_clinical_notes_mct(clin_note: pd.DataFrame) -> pd.DataFrame:
+def split_clinical_notes_mct(clin_note: pd.DataFrame, verbosity_val=0) -> pd.DataFrame:
     """
     Split clinical notes into chunks based on extracted dates. MCT schema from observations index. 
 
@@ -137,6 +147,8 @@ def split_clinical_notes_mct(clin_note: pd.DataFrame) -> pd.DataFrame:
     >>> result_df = split_clinical_notes(clinical_notes_df)
     """
     
+    #n.b possibly redundant, no split ever needed?
+    
     extracted = []
     none_found = []
     document_description_list = []
@@ -149,7 +161,7 @@ def split_clinical_notes_mct(clin_note: pd.DataFrame) -> pd.DataFrame:
     
     for index, row in clin_note.iterrows():
         d = row['observation_valuetext_analysed']
-        ch = find_date(d)
+        ch = find_date(d, row['observationdocument_recordeddtm'], verbosity= verbosity_val)
         extracted.append({'id':row['id'],'client_idcode':row['client_idcode'], 'chunks': ch})
         
         document_description_list.append(row['obscatalogmasteritem_displayname'])
@@ -231,10 +243,10 @@ def split_and_append_chunks(docs: pd.DataFrame, epr=True, mct=False, verbosity: 
 
     if(epr):
         # Split clinical notes according to epr schema
-        split_clinical_notes_result, none_found = split_clinical_notes(clinical_notes)
+        split_clinical_notes_result, none_found = split_clinical_notes(clinical_notes, verbosity_val = verbosity)
     if(mct):
         # Split clinical notes according to mct schema
-        split_clinical_notes_result, none_found = split_clinical_notes_mct(clinical_notes)
+        split_clinical_notes_result, none_found = split_clinical_notes_mct(clinical_notes, verbosity_val = verbosity)
         
 
     # Concatenate non-clinical and split clinical notes
