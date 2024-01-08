@@ -1,14 +1,25 @@
-# This script is specific to certain hospital sites and is not part of the main repository.
-import logging
+
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import regex
 
 
-def find_date(txt):
-    
-    
-    ## it's confusing that the chunks now start with the previous date
+def find_date(txt: str, reg: str = "Entered on -", window: int = 20) -> List[Dict[str, Any]]:
+    """
+    Find and extract chunks of text with associated dates from the input text.
+
+    Parameters:
+    - txt (str): Input text to search for date entries.
+    - reg (str, optional): Regular expression pattern to identify date entries (default is "Entered on -").
+    - window (int, optional): Size of the window to extract text around the identified date entries (default is 20).
+
+    Returns:
+    List[Dict[str, Any]]: List of dictionaries containing extracted chunks with associated dates.
+
+    Example:
+    >>> chunks_list = find_date("Sample text with date entries.")
+    """
     
     reg = "Entered on -"
     window = 20
@@ -53,7 +64,20 @@ def find_date(txt):
     return chunks
 
 
-def split_clinical_notes(clin_note):
+def split_clinical_notes(clin_note: pd.DataFrame) -> pd.DataFrame:
+    """
+    Split clinical notes into chunks based on extracted dates.
+
+    Parameters:
+    - clin_note (pd.DataFrame): DataFrame containing clinical notes to be split.
+
+    Returns:
+    pd.DataFrame: DataFrame containing the split clinical notes.
+
+    Example:
+    >>> result_df = split_clinical_notes(clinical_notes_df)
+    """
+    
     extracted = []
     none_found = []
     document_description_list = []
@@ -101,22 +125,37 @@ def split_clinical_notes(clin_note):
 
 
 
-def split_and_append_chunks(docs, verbosity=0):
-    
-    
+
+
+def split_and_append_chunks(docs: pd.DataFrame, verbosity: int = 0) -> pd.DataFrame:
+    """
+    Split and append clinical notes in a DataFrame.
+
+    Parameters:
+    - docs (pd.DataFrame): Input DataFrame containing documents with a 'document_description' column.
+    - verbosity (int, optional): Verbosity level for logging (default is 0).
+
+    Returns:
+    pd.DataFrame: Concatenated DataFrame containing both non-clinical and split clinical notes.
+
+    Example:
+    >>> result_df = split_and_append_chunks(input_df, verbosity=1)
+    """
+
+    # Filter clinical and non-clinical notes
     clinical_notes = docs[docs['document_description'] == 'Clinical Note']
-    
     non_clinical_notes = docs[docs['document_description'] != 'Clinical Note']
-    
-    
-    clinical_notes.rename(columns={'_id': 'id'}, inplace = True)
-    
+
+    # Rename the '_id' column to 'id'
+    clinical_notes.rename(columns={'_id': 'id'}, inplace=True)
+
+    # Split clinical notes
     split_clinical_notes_result = split_clinical_notes(clinical_notes)
-    
-    
+
+    # Concatenate non-clinical and split clinical notes
     concatenated_notes = pd.concat([non_clinical_notes, split_clinical_notes_result])
-    
-    
+
+    # Reset index
     concatenated_notes.reset_index(inplace=True)
-    
+
     return concatenated_notes
