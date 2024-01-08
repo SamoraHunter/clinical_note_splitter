@@ -57,15 +57,28 @@ def split_clinical_notes(clin_note):
     extracted = []
     none_found = []
     document_description_list = []
+    id_list = []
+    document_guid_list = []
+    clientvisit_visitidcode_list = []
+    index_list = []
+    
+    
     for index, row in clin_note.iterrows():
         d = row['body_analysed']
         ch = find_date(d)
         extracted.append({'id':row['id'],'client_idcode':row['client_idcode'], 'chunks': ch})
-        print(row['document_description'])
+        
         document_description_list.append(row['document_description'])
+        id_list.append(row['id'])
+        document_guid_list.append(row['document_guid'])
+        clientvisit_visitidcode_list.append(row['clientvisit_visitidcode'])
+        index_list.append(row['_index'])
+        
+        
+        
         if len(ch) == 0:
             none_found.append(d)
-    print(document_description_list)
+    
     
     new_docs = []
     counter_1 = 0
@@ -74,6 +87,11 @@ def split_clinical_notes(clin_note):
         for ch in ex['chunks']:
             nd = {'client_idcode': ex['client_idcode'], 'body_analysed': ch['text'], 'updatetime': ch['date']}
             nd['document_description'] = f'{document_description_list[counter_1]}_clinical note chunk_{counter}'
+            nd['_id'] = id_list[counter_1]
+            nd['document_guid'] = document_guid_list[counter_1]
+            nd['clientvisit_visitidcode'] = clientvisit_visitidcode_list[counter_1]
+            nd['_index'] = index_list[counter_1]
+            
             nd['source_file'] = ex['id']
             new_docs.append(nd)
             counter += 1
