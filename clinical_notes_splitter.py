@@ -85,7 +85,7 @@ def split_clinical_notes(clin_note: pd.DataFrame) -> pd.DataFrame:
     document_guid_list = []
     clientvisit_visitidcode_list = []
     index_list = []
-    
+    none_rows = []
     
     for index, row in clin_note.iterrows():
         d = row['body_analysed']
@@ -102,7 +102,7 @@ def split_clinical_notes(clin_note: pd.DataFrame) -> pd.DataFrame:
         
         if len(ch) == 0:
             none_found.append(d)
-    
+            none_rows.append(row)
     
     new_docs = []
     counter_1 = 0
@@ -121,7 +121,7 @@ def split_clinical_notes(clin_note: pd.DataFrame) -> pd.DataFrame:
             counter += 1
         counter_1 += 1
     processed = pd.DataFrame(new_docs)
-    return processed
+    return processed, none_rows
 
 def split_clinical_notes_mct(clin_note: pd.DataFrame) -> pd.DataFrame:
     """
@@ -144,6 +144,7 @@ def split_clinical_notes_mct(clin_note: pd.DataFrame) -> pd.DataFrame:
     document_guid_list = []
     clientvisit_visitidcode_list = []
     index_list = []
+    none_rows = []
     
     
     for index, row in clin_note.iterrows():
@@ -161,6 +162,7 @@ def split_clinical_notes_mct(clin_note: pd.DataFrame) -> pd.DataFrame:
         
         if len(ch) == 0:
             none_found.append(d)
+            none_rows.append(row)
     
     
     new_docs = []
@@ -180,7 +182,7 @@ def split_clinical_notes_mct(clin_note: pd.DataFrame) -> pd.DataFrame:
             counter += 1
         counter_1 += 1
     processed = pd.DataFrame(new_docs)
-    return processed
+    return processed, none_rows
 
 
 
@@ -200,8 +202,28 @@ def split_and_append_chunks(docs: pd.DataFrame, epr=True, mct=False, verbosity: 
     """
 
     # Filter clinical and non-clinical notes
-    clinical_notes = docs[(docs['document_description'] == 'Clinical Note') | (docs['document_description'] == 'AoMRC_ClinicalSummary_FT')]
-    non_clinical_notes = docs[(docs['document_description'] != 'Clinical Note') & (docs['document_description'] != 'AoMRC_ClinicalSummary_FT')]
+    column_name = 'document_description'
+    column_name_mct = 'obscatalogmasteritem_displayname'
+
+    if column_name in docs.columns:
+        clinical_notes = docs[docs[column_name] == 'Clinical Note']
+        non_clinical_notes = docs[docs[column_name] != 'Clinical Note']
+        if verbosity > 1:
+            print(f"Found column '{column_name}' in DataFrame.")
+    elif column_name_mct in docs.columns:
+        clinical_notes = docs[docs[column_name_mct] == 'AoMRC_ClinicalSummary_FT']
+        non_clinical_notes = docs[docs[column_name_mct] != 'AoMRC_ClinicalSummary_FT']
+        if verbosity > 1:
+            print(f"Found column '{column_name_mct}' in DataFrame.")
+    else:
+        raise ValueError(f"Neither {column_name} nor {column_name_mct} found in DataFrame columns.")
+
+    # Check verbosity and print sizes if needed
+    if verbosity > 1:
+        print(f"Size of clinical_notes dataframe: {len(clinical_notes)}")
+        print(f"Size of non_clinical_notes dataframe: {len(non_clinical_notes)}")
+
+
 
 
     # Rename the '_id' column to 'id'
@@ -209,14 +231,18 @@ def split_and_append_chunks(docs: pd.DataFrame, epr=True, mct=False, verbosity: 
 
     if(epr):
         # Split clinical notes according to epr schema
-        split_clinical_notes_result = split_clinical_notes(clinical_notes)
+        split_clinical_notes_result, none_found = split_clinical_notes(clinical_notes)
     if(mct):
         # Split clinical notes according to mct schema
-        split_clinical_notes_result = split_clinical_notes_mct(clinical_notes)
+        split_clinical_notes_result, none_found = split_clinical_notes_mct(clinical_notes)
         
 
     # Concatenate non-clinical and split clinical notes
     concatenated_notes = pd.concat([non_clinical_notes, split_clinical_notes_result])
+    
+    #add none found, 
+    concatenated_notes = concatenated_notes.append(none_found, ignore_index=True)
+
 
     # Reset index
     concatenated_notes.reset_index(inplace=True)
