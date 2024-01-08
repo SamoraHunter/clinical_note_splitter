@@ -123,11 +123,68 @@ def split_clinical_notes(clin_note: pd.DataFrame) -> pd.DataFrame:
     processed = pd.DataFrame(new_docs)
     return processed
 
+def split_clinical_notes_mct(clin_note: pd.DataFrame) -> pd.DataFrame:
+    """
+    Split clinical notes into chunks based on extracted dates. MCT schema from observations index. 
+
+    Parameters:
+    - clin_note (pd.DataFrame): DataFrame containing clinical notes to be split.
+
+    Returns:
+    pd.DataFrame: DataFrame containing the split clinical notes.
+
+    Example:
+    >>> result_df = split_clinical_notes(clinical_notes_df)
+    """
+    
+    extracted = []
+    none_found = []
+    document_description_list = []
+    id_list = []
+    document_guid_list = []
+    clientvisit_visitidcode_list = []
+    index_list = []
+    
+    
+    for index, row in clin_note.iterrows():
+        d = row['observation_valuetext_analysed']
+        ch = find_date(d)
+        extracted.append({'id':row['id'],'client_idcode':row['client_idcode'], 'chunks': ch})
+        
+        document_description_list.append(row['obscatalogmasteritem_displayname'])
+        id_list.append(row['id'])
+        document_guid_list.append(row['observation_guid'])
+        clientvisit_visitidcode_list.append(row['clientvisit_visitidcode'])
+        index_list.append(row['_index'])
+        
+        
+        
+        if len(ch) == 0:
+            none_found.append(d)
+    
+    
+    new_docs = []
+    counter_1 = 0
+    for ex in extracted:
+        counter = 0
+        for ch in ex['chunks']:
+            nd = {'client_idcode': ex['client_idcode'], 'observation_valuetext_analysed': ch['text'], 'observationdocument_recordeddtm': ch['date']}
+            nd['obscatalogmasteritem_displayname'] = f'{document_description_list[counter_1]}_clinical note chunk_{counter}'
+            nd['_id'] = id_list[counter_1]
+            nd['observation_guid'] = document_guid_list[counter_1]
+            nd['clientvisit_visitidcode'] = clientvisit_visitidcode_list[counter_1]
+            nd['_index'] = index_list[counter_1]
+            
+            nd['source_file'] = ex['id']
+            new_docs.append(nd)
+            counter += 1
+        counter_1 += 1
+    processed = pd.DataFrame(new_docs)
+    return processed
 
 
 
-
-def split_and_append_chunks(docs: pd.DataFrame, verbosity: int = 0) -> pd.DataFrame:
+def split_and_append_chunks(docs: pd.DataFrame, epr=True, mct=False, verbosity: int = 0) -> pd.DataFrame:
     """
     Split and append clinical notes in a DataFrame.
 
@@ -143,14 +200,20 @@ def split_and_append_chunks(docs: pd.DataFrame, verbosity: int = 0) -> pd.DataFr
     """
 
     # Filter clinical and non-clinical notes
-    clinical_notes = docs[docs['document_description'] == 'Clinical Note']
-    non_clinical_notes = docs[docs['document_description'] != 'Clinical Note']
+    clinical_notes = docs[(docs['document_description'] == 'Clinical Note') | (docs['document_description'] == 'AoMRC_ClinicalSummary_FT')]
+    non_clinical_notes = docs[(docs['document_description'] != 'Clinical Note') & (docs['document_description'] != 'AoMRC_ClinicalSummary_FT')]
+
 
     # Rename the '_id' column to 'id'
     clinical_notes.rename(columns={'_id': 'id'}, inplace=True)
 
-    # Split clinical notes
-    split_clinical_notes_result = split_clinical_notes(clinical_notes)
+    if(epr):
+        # Split clinical notes according to epr schema
+        split_clinical_notes_result = split_clinical_notes(clinical_notes)
+    if(mct):
+        # Split clinical notes according to mct schema
+        split_clinical_notes_result = split_clinical_notes_mct(clinical_notes)
+        
 
     # Concatenate non-clinical and split clinical notes
     concatenated_notes = pd.concat([non_clinical_notes, split_clinical_notes_result])
@@ -159,3 +222,4 @@ def split_and_append_chunks(docs: pd.DataFrame, verbosity: int = 0) -> pd.DataFr
     concatenated_notes.reset_index(inplace=True)
 
     return concatenated_notes
+
